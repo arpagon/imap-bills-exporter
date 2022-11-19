@@ -1,0 +1,7 @@
+name: imap
+channels:
+  - conda-forge
+dependencies:
+  - ipython
+  - jupyter
+  - python-dotenv  
