@@ -43,6 +43,11 @@ IMAP_SERVER = os.getenv('IMAP_SERVER')
 IMAP_BANK_SENDER_ACCOUNT=os.getenv('IMAP_BANK_SENDER_ACCOUNT')
 IMAP_BANK_MSG_START=os.getenv('IMAP_BANK_MSG_START')
 IMAP_BANK_MSG_END=os.getenv('IMAP_BANK_MSG_END')
+IMAP_BANK_TRANSACTION_TC_REGEX=os.getenv('IMAP_BANK_TRANSACTION_TC_REGEX')
+
+transaction_regex={
+        "tc": IMAP_BANK_TRANSACTION_TC_REGEX
+    }
 
 # Function to get email content part i.e its body part
 def get_body(msg):
@@ -63,6 +68,33 @@ def get_emails(result_bytes):
         typ, data = con.fetch(num, '(RFC822)')
         msgs.append(data)
     return msgs
+
+def export_transactions_text(
+        transaction_regex=transaction_regex,
+        format=csv,
+        outputfile=out/transactions.csv
+        ):
+    """Export transactions
+
+    Receive an array of transactions notification Text and export to file (CSV)
+
+    Args:
+        transaction_regex: Regular expression for convert transactions notification 
+            Text to Variables.
+        format: Format of output file
+        outputfile: Path where the export file is saved
+        
+    Returns:
+        A bool for the state of creation process:
+
+        And create a file like this
+
+        Type,Value,Ref,Datetime,AcountType,Account
+
+    Raises:
+        IOError: An error occurred creating outputfile.
+    """
+    pass
 
 
 # this is done to make SSL connection with GMAIL
@@ -110,3 +142,4 @@ for msg in msgs[::-1]:
                         email_whit_problems.append(data)
             except (UnicodeEncodeError) as e:
                 pass
+
