@@ -43,7 +43,13 @@ IMAP_SERVER = os.getenv('IMAP_SERVER')
 IMAP_BANK_SENDER_ACCOUNT=os.getenv('IMAP_BANK_SENDER_ACCOUNT')
 IMAP_BANK_MSG_START=os.getenv('IMAP_BANK_MSG_START')
 IMAP_BANK_MSG_END=os.getenv('IMAP_BANK_MSG_END')
-IMAP_BANK_NOTIFICATION_REGEX=os.getenv('IMAP_BANK_NOTIFICATION_REGEX')
+REGEX_BANK_FILE=os.getenv('REGEX_BANK_FILE')
+
+
+notification_regex = []
+with open(REGEX_BANK_FILE) as regex_bank_file:
+    for line in regex_bank_file:
+        notification_regex.append(line.strip('\n'))
 
 # Function to get email content part i.e its body part
 def get_body(msg):
@@ -53,23 +59,23 @@ def get_body(msg):
         return msg.get_payload(None, True)
 
 # Function to search for a key value pair
-def search(key, value, con):
-    result, data = con.search(None, key, '"{}"'.format(value))
+def search(key, value, imap_con):
+    result, data = imap_con.search(None, key, '"{}"'.format(value))
     return data
 
 # Function to get the list of emails under this label
-def get_emails(result_bytes):
+def get_emails(result_bytes, imap_con):
     msgs = [] # all the email data are pushed inside an array
     for num in result_bytes[0].split():
-        typ, data = con.fetch(num, '(RFC822)')
+        typ, data = imap_con.fetch(num, '(RFC822)')
         msgs.append(data)
     return msgs
 
 def export_transactions_text(
         transactions_text,
-        transaction_regex=IMAP_BANK_NOTIFICATION_REGEX,
-        format=csv,
-        outputfile=out/transactions.csv
+        transaction_regex=notification_regex,
+        format="csv",
+        outputfile="target/transactions.csv"
         ):
     """Export transactions
 
@@ -87,67 +93,116 @@ def export_transactions_text(
 
         And create a file like this
 
-        Type,Value,Ref,Datetime,AcountType,Account
+        Type,Value,dest,Date,time,Account
 
     Raises:
         IOError: An error occurred creating outputfile.
     """
-    if format==csv:
+    if format=="csv":
         import csv
         
-        header = ['Type', 'Value', 'Ref', 'Datetime', 'AcountType', 'Account']
+        header = ['Type', 'Value', 'dest', 'Date','time', 'Account']
         
-        with open('outputfile', 'w', encoding='UTF8') as f:
+        with open(outputfile, 'w', encoding='UTF8') as f:
             writer = csv.writer(f)
             writer.writerow(header)
-            for transactions in transactions_text:
-                m = re.match(transaction_regex, transactions)
-                print(m.groupdict())
+            for transaction in transactions_text:
+                print(transaction)
+                for regex in notification_regex:                    
+                    match = re.match(regex, transaction)
+                    if match:
+                        print(match.groupdict())
+                        writer.writerow(
+                            [
+                                match['type'],
+                                match['value'],
+                                match['dest'],
+                                match['date'],
+                                match['time'],
+                                match['account']
+                            ]
+                        )
+        return True
 
+def save_transactions_to_file(
+        transactions_text,
+        outputfile="target/transactions.text"
+        ):
+    ''' Save transactions to file
+    
+    Save Notification transactions text to a text file
+    Args:
+        transactions_text: Array of transactions notification text
+        outputfile: Path where the export file is saved
+     
+     Returns:
+        A bool for the state of creation process:
+    '''
+    with open(outputfile, 'w', encoding='UTF8') as f:
+        for transactions in transactions_text:
+            f.write('%s\n' % transactions)
 
-# this is done to make SSL connection with GMAIL
-con = imaplib.IMAP4_SSL(IMAP_SERVER)
+def get_transactions_from_imap(imap_con):
+    """get_transactions_from_imap
 
-# logging the user in
-con.login(IMAP_USER_EMAIL_ADDRESS, IMAP_USER_PASSWORD)
+    Get Notification transactions text from imap
+        
+    Returns:
+        Array of transaction
+    """
 
-# calling function to check for email under this label
-con.select('Inbox')
+    # fetching emails from bank sender account
+    msgs = get_emails(search('FROM', IMAP_BANK_SENDER_ACCOUNT, imap_con), imap_con)
 
-# fetching emails from bank sender account
-msgs = get_emails(search('FROM', IMAP_BANK_SENDER_ACCOUNT, con))
+    # Array of Transaction text
+    transactions_text=[]
 
-# Array of Transaction text
-transactions_text=[]
+    # Array of Email whit problems
+    email_whit_problems=[]
 
-# Array of Email whit problems
-email_whit_problems=[]
+    for msg in msgs[::-1]:
+        for response_part in msg:
+            if type(response_part) is tuple:
+                my_msg=email.message_from_bytes((response_part[1]))
+                content = str(response_part[1], 'utf-8')
+                data = str(content)
 
-for msg in msgs[::-1]:
-    for response_part in msg:
-        if type(response_part) is tuple:
-            my_msg=email.message_from_bytes((response_part[1]))
-            content = str(response_part[1], 'utf-8')
-            data = str(content)
+                # Handling errors related to unicodenecode
+                try:
+                    # Clean data
+                    data=data.replace('\n','')
+                    data=data.replace('\r','')
+                    data=data.replace('=','')
 
-            # Handling errors related to unicodenecode
-            try:
-                # Clean data
-                data=data.replace('\n','')
-                data=data.replace('\r','')
-                data=data.replace('=','')
+                    # Select Important part in email
+                    indexstart = data.find(IMAP_BANK_MSG_START)
+                    data2 = data[indexstart: len(data)]
+                    indexend = data2.find(IMAP_BANK_MSG_END)
+                    
+                    transactions=data2[0: indexend]
 
-                # Select Important part in email
-                indexstart = data.find(IMAP_BANK_MSG_START)
-                data2 = data[indexstart: len(data)]
-                indexend = data2.find(IMAP_BANK_MSG_END)
-                
-                transactions=data2[0: indexend]
+                    if indexstart > 1:    
+                        transactions_text.append(transactions)
+                        if len(transactions) == 0 or len(transactions) >= 300:
+                            email_whit_problems.append(data)
+                except (UnicodeEncodeError) as e:
+                    pass
+    
+    return transactions_text
 
-                if indexstart > 1:    
-                    transactions_text.append(transactions)
-                    if len(transactions) == 0 or len(transactions) >= 300:
-                        email_whit_problems.append(data)
-            except (UnicodeEncodeError) as e:
-                pass
+def main():
+    # this is done to make SSL connection with GMAIL
+    imap_con = imaplib.IMAP4_SSL(IMAP_SERVER)
 
+    # logging the user in
+    imap_con.login(IMAP_USER_EMAIL_ADDRESS, IMAP_USER_PASSWORD)
+
+    # calling function to check for email under this label
+    imap_con.select('Inbox')
+
+    transactions_text=get_transactions_from_imap(imap_con)
+
+    export_transactions_text(transactions_text, notification_regex)
+
+if __name__ == "__main__":
+    main()
