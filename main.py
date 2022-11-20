@@ -43,11 +43,7 @@ IMAP_SERVER = os.getenv('IMAP_SERVER')
 IMAP_BANK_SENDER_ACCOUNT=os.getenv('IMAP_BANK_SENDER_ACCOUNT')
 IMAP_BANK_MSG_START=os.getenv('IMAP_BANK_MSG_START')
 IMAP_BANK_MSG_END=os.getenv('IMAP_BANK_MSG_END')
-IMAP_BANK_TRANSACTION_TC_REGEX=os.getenv('IMAP_BANK_TRANSACTION_TC_REGEX')
-
-transaction_regex={
-        "tc": IMAP_BANK_TRANSACTION_TC_REGEX
-    }
+IMAP_BANK_NOTIFICATION_REGEX=os.getenv('IMAP_BANK_NOTIFICATION_REGEX')
 
 # Function to get email content part i.e its body part
 def get_body(msg):
@@ -70,7 +66,8 @@ def get_emails(result_bytes):
     return msgs
 
 def export_transactions_text(
-        transaction_regex=transaction_regex,
+        transactions_text,
+        transaction_regex=IMAP_BANK_NOTIFICATION_REGEX,
         format=csv,
         outputfile=out/transactions.csv
         ):
@@ -79,6 +76,7 @@ def export_transactions_text(
     Receive an array of transactions notification Text and export to file (CSV)
 
     Args:
+        transactions_text: Array of transactions notification text
         transaction_regex: Regular expression for convert transactions notification 
             Text to Variables.
         format: Format of output file
@@ -94,7 +92,17 @@ def export_transactions_text(
     Raises:
         IOError: An error occurred creating outputfile.
     """
-    pass
+    if format==csv:
+        import csv
+        
+        header = ['Type', 'Value', 'Ref', 'Datetime', 'AcountType', 'Account']
+        
+        with open('outputfile', 'w', encoding='UTF8') as f:
+            writer = csv.writer(f)
+            writer.writerow(header)
+            for transactions in transactions_text:
+                m = re.match(transaction_regex, transactions)
+                print(m.groupdict())
 
 
 # this is done to make SSL connection with GMAIL
