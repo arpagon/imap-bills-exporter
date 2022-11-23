@@ -5,3 +5,6 @@ dependencies:
   - ipython
   - jupyter
   - python-dotenv  
+  - pip
+  - pip:
+    - imap_tools

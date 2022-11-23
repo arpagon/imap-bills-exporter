@@ -40,7 +40,7 @@ load_dotenv()
 IMAP_USER_EMAIL_ADDRESS = os.getenv('IMAP_USER_EMAIL_ADDRESS')
 IMAP_USER_PASSWORD = os.getenv('IMAP_USER_PASSWORD')
 IMAP_SERVER = os.getenv('IMAP_SERVER')
-IMAP_BANK_SENDER_ACCOUNT=os.getenv('IMAP_BANK_SENDER_ACCOUNT')
+IMAP_FILTER=os.getenv('IMAP_FILTER')
 IMAP_BANK_MSG_START=os.getenv('IMAP_BANK_MSG_START')
 IMAP_BANK_MSG_END=os.getenv('IMAP_BANK_MSG_END')
 REGEX_BANK_FILE=os.getenv('REGEX_BANK_FILE')
@@ -59,8 +59,16 @@ def get_body(msg):
         return msg.get_payload(None, True)
 
 # Function to search for a key value pair
-def search(key, value, imap_con):
-    result, data = imap_con.search(None, key, '"{}"'.format(value))
+def search(imap_filter, imap_con):
+    '''Search email 
+    
+    using: https://www.rfc-editor.org/rfc/rfc3501#section-6.4.4
+    To build better filter you can use https://github.com/ikvk/imap_tools
+    
+    Args:
+        imap_filter
+    '''
+    result, data = imap_con.search(None, imap_filter)
     return data
 
 # Function to get the list of emails under this label
@@ -152,7 +160,7 @@ def get_transactions_from_imap(imap_con):
     """
 
     # fetching emails from bank sender account
-    msgs = get_emails(search('FROM', IMAP_BANK_SENDER_ACCOUNT, imap_con), imap_con)
+    msgs = get_emails(search(IMAP_FILTER, imap_con), imap_con)
 
     # Array of Transaction text
     transactions_text=[]
@@ -201,6 +209,8 @@ def main():
     imap_con.select('Inbox')
 
     transactions_text=get_transactions_from_imap(imap_con)
+
+    save_transactions_to_file(transactions_text)
 
     export_transactions_text(transactions_text, notification_regex)
 
