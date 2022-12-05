@@ -3,3 +3,4 @@ Bancolombia le informa (?P<type>.*) por (?P<value>.*) desde cta (?P<account>.*) 
 Bancolombia le informa (?P<type>.*) por (?P<value>.*) a (?P<dest>.*) desde cta (?P<account>.*) (?P<date>\d{2}\/\d{2}\/\d{4}) (?P<time>\d{2}:\d{2}).
 Bancolombia le informa (?P<type>.*) por (?P<value>.*) en (?P<dest>.*) (?P<time>\d{2}:\d{2}). (?P<date>\d{2}\/\d{2}\/\d{4}) compra afiliada a T.Cred (?P<account>\*\d{4})
 Bancolombia le informa (?P<type>.*) por (?P<value>.*) en (?P<dest>.*) Hora (?P<time>\d{2}:\d{2}) (?P<date>\d{2}\/\d{2}\/\d{4}) T.Deb (?P<account>.*).
+Bancolombia informa (?P<type>.*) Programada (?P<dest>.*) por (?P<value>.*) desde Aho(?P<account>.*). (?P<date>\d{2}\/\d{2}\/\d{4}).
