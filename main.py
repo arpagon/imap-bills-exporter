@@ -39,7 +39,7 @@ IMAP_USER_EMAIL_ADDRESS = os.getenv('IMAP_USER_EMAIL_ADDRESS')
 IMAP_USER_PASSWORD = os.getenv('IMAP_USER_PASSWORD')
 IMAP_SERVER = os.getenv('IMAP_SERVER')
 IMAP_FILTER=os.getenv('IMAP_FILTER')
-IMAP_BANK_MSG_START=os.getenv('IMAP_BANK_MSG_START')
+IMAP_BANK_MSG_STARTS=os.getenv('IMAP_BANK_MSG_START').split(',')
 IMAP_BANK_MSG_END=os.getenv('IMAP_BANK_MSG_END')
 REGEX_BANK_FILE=os.getenv('REGEX_BANK_FILE')
 
@@ -264,51 +264,59 @@ def load_transactions_from_file(
     return transactions_text
 
 def get_transactions_from_imap(imap_con):
-    """get_transactions_from_imap
-
-    Get Notification transactions text from imap
-        
+    """
+    Fetches transaction notifications from an IMAP server.
+    
+    Args:
+        imap_con: An established IMAP connection.
+    
     Returns:
-        Array of transaction
+        A list of transaction notifications.
     """
 
-    # fetching emails from bank sender account
+    # Fetch emails from the specified sender
     msgs = get_emails(search(IMAP_FILTER, imap_con), imap_con)
 
-    # Array of Transaction text
-    transactions_text=[]
+    # Initialize lists for transaction notifications and problematic emails
+    transactions_text = []
+    email_whit_problems = []
 
-    # Array of Email whit problems
-    email_whit_problems=[]
-
+    # Loop through each email message
     for msg in msgs[::-1]:
+        # Loop through each part of the email message
         for response_part in msg:
-            if type(response_part) is tuple:
-                my_msg=email.message_from_bytes((response_part[1]))
+            # Check if the part is a tuple
+            if isinstance(response_part, tuple):
+                # Convert the part content to string
                 content = str(response_part[1], 'utf-8')
-                data = str(content)
 
-                # Handling errors related to unicodenecode
                 try:
-                    # Clean data
-                    data=data.replace('\n','')
-                    data=data.replace('\r','')
-                    data=data.replace('=','')
+                    # Clean and slice the content
+                    # Remove newline, carriage return and equals sign characters
+                    content = content.replace('\n', '').replace('\r', '').replace('=', '')
+                    # Loop through each start string
+                    for IMAP_BANK_MSG_START in IMAP_BANK_MSG_STARTS:
+                        # Find the start and end indices of the transaction in the content
+                        start = content.find(IMAP_BANK_MSG_START)
+                        if start > -1:
+                            end = content[start:].find(IMAP_BANK_MSG_END)
+                            transactions = content[start: start + end]
 
-                    # Select Important part in email
-                    indexstart = data.find(IMAP_BANK_MSG_START)
-                    data2 = data[indexstart: len(data)]
-                    indexend = data2.find(IMAP_BANK_MSG_END)
-                    
-                    transactions=data2[0: indexend]
-
-                    if indexstart > 1:    
-                        transactions_text.append(transactions)
-                        if len(transactions) == 0 or len(transactions) >= 300:
-                            email_whit_problems.append(data)
-                except (UnicodeEncodeError) as e:
+                            # Append valid transactions and problematic emails to their respective lists
+                            # Check if the transaction is valid
+                            if start > 1 and 0 < len(transactions) < 300:
+                                # Append the transaction to the list
+                                transactions_text.append(transactions)
+                            else:
+                                # Append the problematic email to the list
+                                email_whit_problems.append(content)
+                            # Break the loop once a start string is found
+                            break  
+                except UnicodeEncodeError:
+                    # Ignore UnicodeEncodeError
                     pass
-    
+
+    # Return the list of transaction notifications
     return transactions_text
 
 def main():
@@ -329,9 +337,15 @@ def main():
 
     transactions_text=get_transactions_from_imap(imap_con)
 
-    save_transactions_to_file(transactions_text)
+    
 
-    export_transactions_text(transactions_text, notification_regex)
+    # set date for export file
+    now = datetime.now()
+    dt_string = now.strftime("%Y-%m-%d_%H:%M:%S")
+    csv_outputfile = f"target/transactions-{dt_string}.csv"
+    text_outputfile = f"target/transactions-{dt_string}.text"
+    save_transactions_to_file(transactions_text, text_outputfile)
+    export_transactions_text(transactions_text, notification_regex, "csv", csv_outputfile)
 
 if __name__ == "__main__":
     main()
