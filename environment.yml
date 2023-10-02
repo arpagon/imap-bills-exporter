@@ -8,3 +8,5 @@ dependencies:
   - pip
   - pip:
     - imap_tools
+    - pandas
+    - beautifulsoup4

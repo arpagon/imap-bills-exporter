@@ -29,9 +29,12 @@ __status__ = "beta"
 import os
 import re
 
-import imaplib, email
+import imaplib
+from email import message_from_bytes
 from dotenv import load_dotenv
 from datetime import datetime
+from bs4 import BeautifulSoup
+
 
 load_dotenv()
 
@@ -39,10 +42,13 @@ IMAP_USER_EMAIL_ADDRESS = os.getenv('IMAP_USER_EMAIL_ADDRESS')
 IMAP_USER_PASSWORD = os.getenv('IMAP_USER_PASSWORD')
 IMAP_SERVER = os.getenv('IMAP_SERVER')
 IMAP_FILTER=os.getenv('IMAP_FILTER')
-IMAP_BANK_MSG_STARTS=os.getenv('IMAP_BANK_MSG_START').split(',')
-IMAP_BANK_MSG_END=os.getenv('IMAP_BANK_MSG_END')
+IMAP_BANK_MSG_STARTS=os.getenv('IMAP_BANK_MSG_STARTS').split('|')
+IMAP_BANK_MSG_ENDS=os.getenv('IMAP_BANK_MSG_ENDS').split('|')
 REGEX_BANK_FILE=os.getenv('REGEX_BANK_FILE')
 
+last_msg = None
+last_content = None
+last_response_part = None
 
 notification_regex = []
 with open(REGEX_BANK_FILE) as regex_bank_file:
@@ -55,7 +61,8 @@ def get_body(msg):
     """
     This function takes in a MIMEMultipart email object and returns 
     its body as a string. If the email is not multipart, 
-    it simply returns the payload.
+    it simply returns the payload. If the email is HTML, 
+    it uses BeautifulSoup to extract the text.
 
     Args:
         msg (MIMEMultipart): The MIMEMultipart email object.
@@ -66,7 +73,12 @@ def get_body(msg):
     if msg.is_multipart():
         return get_body(msg.get_payload(0))
     else:
-        return msg.get_payload(None, True)
+        content_type = msg.get_content_type()
+        if content_type == "text/html":
+            soup = BeautifulSoup(msg.get_payload(None, True), "html.parser")
+            return soup.get_text()
+        else:
+            return msg.get_payload(None, True)
 
 # Function to search for a key value pair
 def search(imap_filter, imap_con):
@@ -263,32 +275,51 @@ def load_transactions_from_file(
     
     return transactions_text
 
-def get_transactions_from_imap(imap_con):
+def get_transactions_from_imap(
+    imap_con, 
+    IMAP_BANK_MSG_STARTS=os.getenv('IMAP_BANK_MSG_STARTS').split('|')
+):
     """
     Fetches transaction notifications from an IMAP server.
     
     Args:
         imap_con: An established IMAP connection.
+        IMAP_BANK_MSG_STARTS: A list of start strings for slicing the content. Default is from .env
     
     Returns:
-        A list of transaction notifications.
+        A tuple containing a list of transaction notifications and a list of problematic emails.
     """
+    global last_msg, last_content, last_response_part
+
 
     # Fetch emails from the specified sender
     msgs = get_emails(search(IMAP_FILTER, imap_con), imap_con)
 
     # Initialize lists for transaction notifications and problematic emails
     transactions_text = []
-    email_whit_problems = []
+    email_with_problems = []
+    emails_without_transactions = []
+
+    # Initialize counters for telemetry
+    email_count = 0
+    email_with_start_count = {start: 0 for start in IMAP_BANK_MSG_STARTS}
+    transaction_count = 0
 
     # Loop through each email message
     for msg in msgs[::-1]:
+        email_count += 1
         # Loop through each part of the email message
+        last_msg = msg
+        email_contains_transaction = False
+
         for response_part in msg:
+            last_response_part = response_part
             # Check if the part is a tuple
             if isinstance(response_part, tuple):
                 # Convert the part content to string
-                content = str(response_part[1], 'utf-8')
+                email_msg = message_from_bytes(response_part[1])
+                content = get_body(email_msg)
+                last_content = content
 
                 try:
                     # Clean and slice the content
@@ -299,25 +330,59 @@ def get_transactions_from_imap(imap_con):
                         # Find the start and end indices of the transaction in the content
                         start = content.find(IMAP_BANK_MSG_START)
                         if start > -1:
-                            end = content[start:].find(IMAP_BANK_MSG_END)
-                            transactions = content[start: start + end]
+                            email_contains_transaction = True
+                            email_with_start_count[IMAP_BANK_MSG_START] += 1
+                            
+                            # Calculate the smallest end index among all end messages
+                            end_indices = [content[start:].find(IMAP_BANK_MSG_END) for IMAP_BANK_MSG_END in IMAP_BANK_MSG_ENDS]
+                            valid_end_indices = [index for index in end_indices if index != -1]
+
+                            # If there are no valid end indices, skip this iteration
+                            if not valid_end_indices:
+                                continue
+
+                            smallest_end_index = min(valid_end_indices)
+
+                            transactions = content[start: start + smallest_end_index]
+
 
                             # Append valid transactions and problematic emails to their respective lists
                             # Check if the transaction is valid
                             if start > 1 and 0 < len(transactions) < 300:
                                 # Append the transaction to the list
                                 transactions_text.append(transactions)
+                                transaction_count += 1
                             else:
                                 # Append the problematic email to the list
-                                email_whit_problems.append(content)
-                            # Break the loop once a start string is found
-                            break  
+                                email_with_problems.append(content)
                 except UnicodeEncodeError:
                     # Ignore UnicodeEncodeError
+                    email_with_problems.append(content)
                     pass
+        # If the email does not contain a transaction, add its body to the list
+        if not email_contains_transaction:
+            emails_without_transactions.append(content)
 
-    # Return the list of transaction notifications
-    return transactions_text
+    # Print telemetry
+    print(f"Total emails: {email_count}")
+    for start, count in email_with_start_count.items():
+        print(f"Emails with start '{start}': {count}")
+    print(f"Total transactions: {transaction_count}")
+    print(f"Emails with problems: {len(email_with_problems)}")
+    print(f"Emails without transactions: {len(emails_without_transactions)}")
+
+    # Return the list of transaction notifications and the list of problematic emails
+    return transactions_text, email_with_problems, emails_without_transactions
+
+    # Print telemetry
+    print(f"Total emails: {email_count}")
+    for start, count in email_with_start_count.items():
+        print(f"Emails with start '{start}': {count}")
+    print(f"Total transactions: {transaction_count}")
+    print(f"Emails with problems: {len(email_with_problems)}")
+
+    # Return the list of transaction notifications and the list of problematic emails
+    return transactions_text, email_with_problems
 
 def main():
     """
@@ -335,8 +400,7 @@ def main():
     # calling function to check for email under this label
     imap_con.select('Inbox')
 
-    transactions_text=get_transactions_from_imap(imap_con)
-
+    (transactions_text, email_with_problems, emails_without_transactions) = get_transactions_from_imap(imap_con)
     
 
     # set date for export file
