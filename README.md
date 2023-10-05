@@ -106,3 +106,40 @@ This diagram represents the flow of the script. The user runs the script, which 
 emails from the IMAP server. The script then extracts the transactions from the emails 
 and saves them to a CSV file.
 
+
+## Setting up Gmail Authentication using App Password
+
+If you're using Gmail's 2-Step Verification, accessing your emails via IMAP requires an App Password. An App Password is a 16-digit passcode that gives less secure apps or devices permission to access your Google Account.
+
+### Steps to Generate an App Password for Gmail:
+
+1. **Turn on 2-Step Verification**: 
+    - If you haven't already, turn on [2-Step Verification](https://www.google.com/landing/2step/) for your Google Account.
+    
+2. **Access App Passwords Page**:
+    - Go to your [Google Account](https://myaccount.google.com/).
+    - On the left navigation panel, click on **Security**.
+    - In the "Signing in to Google" section, select **App Passwords**. You might need to sign in again.
+
+3. **Generate App Password**:
+    - At the bottom, click **Select app** and choose the app you're using (you can select "Mail").
+    - Click **Select device** and choose the device you’re using.
+    - Click **Generate**.
+
+4. **Review Generated Password**:
+    - You'll see a 16-digit password on your screen. Note this down without any spaces.
+    - Use this App Password where you need to enter a password in your IMAP client or application.
+
+5. **Complete the Setup**:
+    - Next to the password, click **Done**.
+
+6. **Add to `.env` File**:
+    - Navigate to your project's root directory and open the `.env` file (or create one if it doesn't exist).
+    - Add the following line:
+      ```
+      IMAP_USER_PASSWORD=Your16DigitAppPassword
+      ```
+    - Replace `Your16DigitAppPassword` with the App Password you generated.
+    - Save the file.
+
+> **Note**: If you decide not to use the app or you change your device, it's a good idea to revoke the App Password to maintain security.
