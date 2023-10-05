@@ -34,6 +34,7 @@ from email import message_from_bytes
 from dotenv import load_dotenv
 from datetime import datetime
 from bs4 import BeautifulSoup
+import pandas as pd
 
 
 load_dotenv()
@@ -238,10 +239,65 @@ def export_transactions_text(
                         )
         return True
 
+def export_transactions_df(transactions_text, transaction_regex):
+    """
+    Export transactions to a pandas DataFrame.
+
+    Args:
+        transactions_text: Array of transactions notification text
+        transaction_regex: Regular expression for convert transactions notification 
+            Text to Variables.
+
+    Returns:
+        df: A pandas DataFrame containing the transactions data.
+    """
+    # Initialize an empty list to store the transactions data
+    data = []
+    regex_match_count = {i: 0 for i, _ in enumerate(transaction_regex, start=1)}
+
+    # Loop through each transaction in transactions_text
+    for transaction in transactions_text:
+        match_found = False
+        # Loop through each regex in transaction_regex
+        for i, regex in enumerate(transaction_regex, start=1):
+            match = re.match(regex, transaction)
+            if match:
+                match_dict = match.groupdict()
+                match_found = True
+                regex_match_count[i] += 1
+
+                if not "time" in match_dict.keys():
+                    match_dict['time'] = "00:00"
+
+                # Append the transaction data to the data list
+                data.append(
+                    [
+                        match_dict['type'],
+                        match_dict['value'],
+                        clean_value(match_dict['value']),
+                        match_dict['dest'],
+                        match_dict['date'],
+                        match_dict['time'],
+                        clean_date(match_dict['date'], match_dict['time']),
+                        match_dict['account'],
+                    ]
+                )
+        if not match_found:
+            print(f"No regex matched for transaction: {transaction}")
+
+    # Convert the data list to a pandas DataFrame
+    df = pd.DataFrame(data, columns=['Type', 'ValueString', 'ValueFloat', 'dest', 'Date', 'time', 'DateTime', 'Account'])
+
+    # Print the count of matches for each regex
+    for i, count in regex_match_count.items():
+        print(f"Regex {i} matched {count} transactions")
+
+    return df
+
 def save_transactions_to_file(
-        transactions_text,
-        outputfile="target/transactions.text"
-        ):
+    transactions_text,
+    outputfile="target/transactions.text"
+):
     ''' Save transactions to file
     
     Save Notification transactions text to a text file
@@ -255,6 +311,35 @@ def save_transactions_to_file(
     with open(outputfile, 'w', encoding='UTF8') as f:
         for transactions in transactions_text:
             f.write('%s\n' % transactions)
+
+def remove_duplicates_from_list(
+        transactions_text,
+):
+    ''' Remove duplicates from list and print telemetry
+    
+    This function removes duplicate transactions from the list and prints the number of duplicates removed.
+    Args:
+        transactions_text: Array of transactions notification text
+     
+     Returns:
+        transactions_text: Array of transactions notification text with duplicates removed
+    '''
+    # Get the length of the original list
+    original_length = len(transactions_text)
+    
+    # Convert the list to a set to remove duplicates, then convert it back to a list
+    transactions_text = list(set(transactions_text))
+    
+    # Get the length of the list after removing duplicates
+    new_length = len(transactions_text)
+    
+    # Calculate the number of duplicates removed
+    duplicates_removed = original_length - new_length
+    
+    # Print the number of duplicates removed
+    print(f"Number of duplicates removed: {duplicates_removed}")
+    
+    return transactions_text
 
 def load_transactions_from_file(
         inputfile="target/transactions.text"

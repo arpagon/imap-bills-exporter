@@ -10,3 +10,5 @@ dependencies:
     - imap_tools
     - pandas
     - beautifulsoup4
+    - matplotlib
+    - seaborn
