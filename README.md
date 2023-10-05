@@ -24,6 +24,47 @@ This Python script, main.py, is designed to fetch transaction notifications from
 - IMAP_BANK_MSG_END: The end string for filtering emails.
 - REGEX_BANK_FILE: The path to a file containing regular expressions for parsing transaction notifications.
 
+## CSV Files Used for Categorization
+
+### Accounts CSV
+
+This file, `accounts.csv`, contains information about various accounts and is used for categorizing transactions based on the destination account.
+
+### Trips CSV
+
+The `trips.csv` file contains details about various trips and is used to categorize transactions based on the dates they occurred.
+
+### Provider Name CSV
+
+`ProviderName.csv` is used to categorize transactions based on providers. It contains provider names and their associated categories.
+
+### Examples
+#### `accounts.csv.example`
+```markdown
+DestAccount,AccountName,SpendType
+12345678901,Account Holder A,expense_type1
+98765432102,Account Holder B,expense_type2
+11122233344,Account Holder C,expense_type3
+```
+
+#### `trips.csv.example`
+```markdown
+StartDate,EndDate,TripName,SpendType
+2022-01-01,2022-01-10,Trip A,travel
+2022-02-05,2022-02-15,Trip B,business
+2022-03-10,2022-03-20,Trip C,holiday
+```
+
+#### `ProviderName.csv.example`
+```markdown
+ProviderDestName,ProviderGroup,SpendType,Filter
+Provider A,Group A,expense_type4,contains
+Provider B,Group B,expense_type5,contains
+Provider C,Group C,expense_type6,contains
+```
+
+You can copy and paste these markdown snippets into your `README.md` file.
+
 ### Create mamba env
 ```bash=
 mamba env create python=3.10 -f environment.yml
